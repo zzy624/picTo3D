@@ -1,0 +1,1176 @@
+<script>
+  // 捕获所有错误并显示
+  window.onerror = function(msg, url, line) {
+    console.error('全局错误:', msg, url, line);
+    alert('错误: ' + msg + '\n行号: ' + line);
+    return false;
+  };
+
+  // 检查网络请求
+  const originalFetch = window.fetch;
+  window.fetch = function(...args) {
+    console.log('Fetch请求:', args[0]);
+    return originalFetch.apply(this, args);
+  };
+</script>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>3D模型展示 - 鱼类图鉴</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            background-color: #1a2a3a;
+            color: white;
+        }
+
+        #top-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            z-index: 100;
+            flex-wrap: wrap;
+        }
+
+        /* 自定义下拉菜单样式 */
+        .custom-select {
+            position: relative;
+            min-width: 160px;
+            z-index: 1000;
+        }
+
+        .select-selected {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 12px 24px;
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            transition: all 0.3s ease;
+            min-width: 150px;
+        }
+
+        .select-selected:hover {
+            background: rgba(30, 30, 40, 0.8);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .select-arrow {
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+            transition: transform 0.3s ease;
+        }
+
+        .select-arrow.open {
+            transform: rotate(180deg);
+        }
+
+        .select-items {
+            position: absolute;
+            top: calc(100% + 5px);
+            left: 0;
+            right: 0;
+            background: rgba(20, 25, 35, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1001;
+            display: none;
+        }
+
+        .select-items.show {
+            display: block;
+        }
+
+        /* 自定义滚动条 */
+        .select-items::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .select-items::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+        }
+
+        .select-items::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+        }
+
+        .select-items::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .select-item {
+            padding: 12px 20px;
+            color: rgba(255,255,255,0.9);
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .select-item:last-child {
+            border-bottom: none;
+        }
+
+        .select-item:hover {
+            background: rgba(74, 144, 226, 0.3);
+            padding-left: 25px;
+        }
+
+        .select-item.selected {
+            background: rgba(74, 144, 226, 0.5);
+            color: white;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .select-item.selected::after {
+            content: '✓';
+            position: absolute;
+            right: 20px;
+            color: #4a90e2;
+            font-weight: bold;
+        }
+
+        #brightness-control {
+            background: rgba(30, 30, 40, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #brightness-control input {
+            width: 150px;
+            cursor: pointer;
+        }
+
+        #brightness-value {
+            min-width: 40px;
+            text-align: center;
+            color: #4a90e2;
+            font-weight: bold;
+        }
+
+        #control-panel {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 30, 40, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 50px;
+            padding: 8px;
+            display: flex;
+            gap: 8px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.15);
+            z-index: 100;
+        }
+
+        .control-btn {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.8);
+            padding: 12px 24px;
+            border-radius: 40px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .control-btn:hover {
+            background: rgba(255,255,255,0.15);
+            color: white;
+        }
+
+        .control-btn.active {
+            background: #4a90e2;
+            color: white;
+            box-shadow: 0 4px 10px rgba(74,144,226,0.3);
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px 50px;
+            color: white;
+            font-size: 18px;
+            z-index: 1000;
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            transition: opacity 0.5s;
+        }
+
+        #loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            border-top-color: #4a90e2;
+            margin: 0 auto 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #progress-bar {
+            width: 200px;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+
+        #progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4a90e2, #7b68ee);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        #error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 80, 80, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px 50px;
+            color: white;
+            font-size: 16px;
+            z-index: 1000;
+            border: 1px solid rgba(255,255,255,0.2);
+            display: none;
+            text-align: center;
+        }
+
+        #error-message.show {
+            display: block;
+        }
+
+        /* 自定义提示框 */
+        .custom-alert {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 30, 40, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 30px 40px;
+            color: white;
+            font-size: 16px;
+            z-index: 2000;
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            text-align: center;
+            min-width: 280px;
+            max-width: 90%;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            pointer-events: none;
+        }
+
+        .custom-alert.show {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .custom-alert-icon {
+            font-size: 40px;
+            margin-bottom: 15px;
+        }
+
+        .custom-alert-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #ffaa88;
+        }
+
+        .custom-alert-message {
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .custom-alert-button {
+            background: #4a90e2;
+            border: none;
+            color: white;
+            padding: 10px 30px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255,255,255,0.2);
+            min-width: 120px;
+        }
+
+        .custom-alert-button:hover {
+            background: #5a9ef0;
+            transform: scale(1.05);
+        }
+
+        .custom-alert-button:active {
+            transform: scale(0.95);
+        }
+
+        /* 遮罩层 */
+        .custom-alert-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            z-index: 1999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .custom-alert-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        @media (max-width: 768px) {
+            #top-bar {
+                top: 15px;
+                left: 15px;
+                right: 15px;
+            }
+
+            .custom-select {
+                min-width: 140px;
+            }
+
+            .select-selected {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+
+            .select-item {
+                padding: 12px 16px;
+                font-size: 14px;
+            }
+
+            #brightness-control {
+                padding: 8px 15px;
+            }
+
+            #brightness-control input {
+                width: 100px;
+            }
+
+            .control-btn {
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+
+            .custom-alert {
+                padding: 25px 30px;
+                min-width: 240px;
+            }
+
+            .custom-alert-icon {
+                font-size: 36px;
+            }
+
+            .custom-alert-title {
+                font-size: 16px;
+            }
+
+            .custom-alert-message {
+                font-size: 14px;
+            }
+
+            .custom-alert-button {
+                padding: 8px 25px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<div class="custom-alert-overlay" id="alertOverlay"></div>
+<div class="custom-alert" id="customAlert">
+    <div class="custom-alert-icon">⚠️</div>
+    <div class="custom-alert-title">提示</div>
+    <div class="custom-alert-message" id="alertMessage"></div>
+    <button class="custom-alert-button" id="alertButton">确定</button>
+</div>
+<body>
+<div id="top-bar">
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <!-- 自定义下拉菜单 - 替换原有的select -->
+        <div class="custom-select">
+            <div class="select-selected" id="selectedFish">
+                <span>🐟 大嘴鲈鱼</span>
+                <span class="select-arrow">▼</span>
+            </div>
+            <div class="select-items" id="selectItems">
+                <div class="select-item selected" data-value="大嘴鲈鱼">🐟 大嘴鲈鱼</div>
+                <div class="select-item" data-value="金鳟">🐟 金鳟</div>
+                <div class="select-item" data-value="马口">🐟 马口</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="brightness-control">
+        <span>☀️</span>
+        <input type="range" id="brightnessSlider" min="0.5" max="3.0" step="0.1" value="1.5">
+        <span id="brightness-value">1.5x</span>
+    </div>
+</div>
+
+<div id="control-panel">
+    <button class="control-btn active" id="rotateBtn">
+        <span>🔄</span> 自动旋转
+    </button>
+    <button class="control-btn" id="resetBtn">
+        <span>🎯</span> 重置视角
+    </button>
+    <button class="control-btn" id="fullscreenBtn">
+        <span>⛶</span> 全屏
+    </button>
+</div>
+
+<div id="loading">
+    <div class="spinner"></div>
+    <div>加载模型中...</div>
+    <div id="progress-bar">
+        <div id="progress-fill"></div>
+    </div>
+    <div style="margin-top: 10px; font-size: 14px;" id="progress-text">0%</div>
+</div>
+
+<div id="error-message">
+    <div style="font-size: 40px; margin-bottom: 15px;">😢</div>
+    <div>模型加载失败</div>
+    <div style="font-size: 14px; margin-top: 10px;" id="error-detail"></div>
+    <button onclick="location.reload()" style="margin-top: 20px; padding: 8px 20px; background: white; border: none; border-radius: 20px; cursor: pointer;">重试</button>
+</div>
+
+<!-- 引入Three.js -->
+<!-- 使用全局变量方式引入Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<!-- 注意：GLTFLoader需要额外引入 -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+<!-- 在 </body> 前添加 -->
+<div class="custom-alert-overlay" id="alertOverlay"></div>
+<div class="custom-alert" id="customAlert">
+    <div class="custom-alert-icon">⚠️</div>
+    <div class="custom-alert-title">提示</div>
+    <div class="custom-alert-message" id="alertMessage"></div>
+    <button class="custom-alert-button" id="alertButton">确定</button>
+</div>
+
+<script>
+  // 自定义提示函数
+  function showAlert(message, title = '提示', icon = '⚠️') {
+    const overlay = document.getElementById('alertOverlay');
+    const alert = document.getElementById('customAlert');
+    const alertMessage = document.getElementById('alertMessage');
+    const alertTitle = document.querySelector('.custom-alert-title');
+    const alertIcon = document.querySelector('.custom-alert-icon');
+
+    alertMessage.textContent = message;
+    alertTitle.textContent = title;
+    alertIcon.textContent = icon;
+
+    overlay.classList.add('show');
+    alert.classList.add('show');
+  }
+
+  function hideAlert() {
+    const overlay = document.getElementById('alertOverlay');
+    const alert = document.getElementById('customAlert');
+    overlay.classList.remove('show');
+    alert.classList.remove('show');
+  }
+
+  // 点击确定按钮隐藏
+  document.getElementById('alertButton').addEventListener('click', hideAlert);
+
+  // 点击遮罩层隐藏
+  document.getElementById('alertOverlay').addEventListener('click', hideAlert);
+
+  // 按ESC键隐藏（可选）
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      hideAlert();
+    }
+  });
+</script>
+
+<script type="module">
+  // import * as THREE from 'three';
+  // import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  // import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+  // ---------- 配置 ----------
+  // 模型路径配置 - 你可以在这里设置不同鱼对应的模型文件路径
+  const MODEL_PATHS = {
+    '大嘴鲈鱼': './models/fish+3d+model.glb',  // 默认使用这个
+    '金鳟': './models/salmon+3d+model.glb',    // 你需要替换成实际路径
+    '马口': './models/makou+3d+model.glb',      // 你需要替换成实际路径
+  };
+
+  let currentModelPath = './models/fish+3d+model.glb';
+  let currentFishName = '大嘴鲈鱼';
+  let currentModel = null;
+
+  // ---------- 初始化场景 ----------
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x2a8fcc);
+
+  // 相机
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(3, 1.5, 4);
+
+  // 渲染器
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.5;
+  document.body.appendChild(renderer.domElement);
+
+  // 控制器
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 2.0;
+  controls.enableZoom = true;
+  controls.maxPolarAngle = Math.PI / 2;
+  controls.target.set(0, 0.5, 0);
+
+  // ========== 光照系统 ==========
+
+  // 环境光
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  scene.add(ambientLight);
+
+  // 主光源 - 方向光
+  const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.5);
+  dirLight.position.set(2, 5, 3);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.width = 1024;
+  dirLight.shadow.mapSize.height = 1024;
+  scene.add(dirLight);
+
+  // 辅助光源
+  const sideLight1 = new THREE.DirectionalLight(0xffaa88, 1.0);
+  sideLight1.position.set(-3, 2, 2);
+  scene.add(sideLight1);
+
+  const sideLight2 = new THREE.DirectionalLight(0x88aaff, 0.8);
+  sideLight2.position.set(2, 1, -3);
+  scene.add(sideLight2);
+
+  // 点光源 - 增加局部亮度
+  const pointLight1 = new THREE.PointLight(0xffaa66, 0.5);
+  pointLight1.position.set(2, 2, 2);
+  scene.add(pointLight1);
+
+  const pointLight2 = new THREE.PointLight(0x66aaff, 0.5);
+  pointLight2.position.set(-2, 1, -2);
+  scene.add(pointLight2);
+
+  // ========== 水下环境 ==========
+
+  // 漂浮粒子（模拟水中的浮游生物）
+  const particlesGeometry = new THREE.BufferGeometry();
+  const particlesCount = 200;
+  const posArray = new Float32Array(particlesCount * 3);
+
+  for (let i = 0; i < particlesCount * 3; i += 3) {
+    posArray[i] = (Math.random() - 0.5) * 20;
+    posArray[i+1] = (Math.random() - 0.5) * 10;
+    posArray[i+2] = (Math.random() - 0.5) * 20 - 2;
+  }
+
+  particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+  const particlesMaterial = new THREE.PointsMaterial({
+    size: 0.06,
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.3
+  });
+  const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+  scene.add(particlesMesh);
+
+  // 地面 - 沙地效果
+  const groundGeometry = new THREE.CircleGeometry(8, 32);
+
+  // 创建沙地纹理效果（使用Canvas生成噪点纹理）
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#c4a484';
+  ctx.fillRect(0, 0, 512, 512);
+
+  // 添加噪点
+  for (let i = 0; i < 5000; i++) {
+    ctx.fillStyle = `rgba(160, 120, 80, ${Math.random() * 0.3})`;
+    ctx.fillRect(Math.floor(Math.random() * 512), Math.floor(Math.random() * 512), 2, 2);
+  }
+
+  const sandTexture = new THREE.CanvasTexture(canvas);
+
+  const groundMaterial = new THREE.MeshStandardMaterial({
+    map: sandTexture,
+    color: 0xd2b48c,
+    roughness: 0.8,
+    metalness: 0.0
+  });
+  const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.5;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // ========== 真实水草 ==========
+  // 使用弯曲的管状几何体创建更自然的水草
+
+  function createRealisticWeed(x, z) {
+    const group = new THREE.Group();
+
+    // 水草颜色 - 自然的绿色调
+    const greenColors = [0x2e7d32, 0x388e3c, 0x43a047, 0x4caf50, 0x66bb6a];
+
+    // 创建一簇水草（3-6根）
+    const weedCount = 3 + Math.floor(Math.random() * 4);
+
+    for (let j = 0; j < weedCount; j++) {
+      // 每根水草的高度不同
+      const height = 0.4 + Math.random() * 0.8;
+      const segments = 8; // 曲线段数
+
+      // 创建曲线路径 - 让水草自然弯曲
+      const points = [];
+
+      // 起始点（底部）
+      points.push(new THREE.Vector3(0, 0, 0));
+
+      // 中间控制点 - 随机弯曲方向
+      const bendX = (Math.random() - 0.5) * 0.3;
+      const bendZ = (Math.random() - 0.5) * 0.3;
+
+      // 中间点1（1/3高度）
+      points.push(new THREE.Vector3(
+        bendX * 0.5,
+        height * 0.3,
+        bendZ * 0.5
+      ));
+
+      // 中间点2（2/3高度）
+      points.push(new THREE.Vector3(
+        bendX,
+        height * 0.6,
+        bendZ
+      ));
+
+      // 顶部点 - 稍微回收一点
+      points.push(new THREE.Vector3(
+        bendX * 0.7,
+        height * 0.9,
+        bendZ * 0.7
+      ));
+
+      // 创建曲线
+      const curve = new THREE.CatmullRomCurve3(points);
+
+      // 创建管状几何体
+      const tubeGeometry = new THREE.TubeGeometry(
+        curve,      // 曲线
+        segments,   // 分段数
+        0.02 + Math.random() * 0.02, // 半径
+        8,          // 径向分段
+        false       // 不封闭
+      );
+
+      // 随机选择颜色
+      const colorIndex = Math.floor(Math.random() * greenColors.length);
+      const baseColor = greenColors[colorIndex];
+
+      // 材质 - 带点光泽
+      const material = new THREE.MeshStandardMaterial({
+        color: baseColor,
+        emissive: 0x112211,
+        emissiveIntensity: 0.1,
+        roughness: 0.6,
+        metalness: 0.1,
+        flatShading: false
+      });
+
+      const weed = new THREE.Mesh(tubeGeometry, material);
+
+      // 随机位置偏移（让一簇内的水草分散开）
+      const offsetX = (Math.random() - 0.5) * 0.15;
+      const offsetZ = (Math.random() - 0.5) * 0.15;
+      weed.position.set(offsetX, -0.5, offsetZ);
+
+      // 随机旋转
+      weed.rotation.y = Math.random() * Math.PI * 2;
+
+      weed.castShadow = true;
+      weed.receiveShadow = true;
+
+      group.add(weed);
+    }
+
+    // 添加一些小叶片（使用薄片）
+    const leafCount = 2 + Math.floor(Math.random() * 3);
+    for (let k = 0; k < leafCount; k++) {
+      const leafHeight = 0.15 + Math.random() * 0.2;
+      const leafWidth = 0.08 + Math.random() * 0.1;
+
+      const leafGeo = new THREE.BoxGeometry(leafWidth, leafHeight, 0.01);
+      const leafMat = new THREE.MeshStandardMaterial({
+        color: 0x4caf50,
+        emissive: 0x112211,
+        emissiveIntensity: 0.1,
+        side: THREE.DoubleSide
+      });
+
+      const leaf = new THREE.Mesh(leafGeo, leafMat);
+
+      // 随机位置和旋转
+      leaf.position.set(
+        (Math.random() - 0.5) * 0.2,
+        0.1 + Math.random() * 0.2,
+        (Math.random() - 0.5) * 0.2
+      );
+      leaf.rotation.x = Math.random() * 0.5;
+      leaf.rotation.z = Math.random() * 0.5;
+      leaf.rotation.y = Math.random() * Math.PI * 2;
+
+      leaf.castShadow = true;
+      leaf.receiveShadow = true;
+
+      group.add(leaf);
+    }
+
+    group.position.set(x, 0, z);
+
+    return group;
+  }
+
+  // 添加一些细长的水草（另一种风格）
+  function createTallWeed(x, z) {
+    const group = new THREE.Group();
+
+    // 创建几根细长的水草
+    for (let i = 0; i < 2; i++) {
+      const height = 0.6 + Math.random() * 0.5;
+      const points = [];
+
+      points.push(new THREE.Vector3(0, 0, 0));
+
+      // 轻微弯曲
+      const bend = (Math.random() - 0.5) * 0.2;
+      points.push(new THREE.Vector3(bend * 0.3, height * 0.3, bend * 0.3));
+      points.push(new THREE.Vector3(bend, height * 0.6, bend));
+      points.push(new THREE.Vector3(bend * 0.5, height, bend * 0.5));
+
+      const curve = new THREE.CatmullRomCurve3(points);
+      const tubeGeo = new THREE.TubeGeometry(curve, 8, 0.015, 6, false);
+
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x2e7d32,
+        roughness: 0.7
+      });
+
+      const weed = new THREE.Mesh(tubeGeo, material);
+
+      // 分散位置
+      weed.position.set((i - 0.5) * 0.1, -0.5, 0);
+      weed.rotation.y = Math.random() * Math.PI;
+
+      weed.castShadow = true;
+      weed.receiveShadow = true;
+
+      group.add(weed);
+    }
+
+    group.position.set(x, 0, z);
+    return group;
+  }
+
+  // 在场景中放置水草
+  function placeWeeds() {
+    // 放置主要水草丛
+    for (let i = 0; i < 12; i++) {
+      let x, z;
+      do {
+        x = (Math.random() - 0.5) * 6;
+        z = (Math.random() - 0.5) * 6;
+      } while (Math.sqrt(x*x + z*z) < 1.2);
+
+      const weedGroup = createRealisticWeed(x, z);
+      scene.add(weedGroup);
+    }
+
+    // 放置一些细长水草
+    for (let i = 0; i < 8; i++) {
+      let x, z;
+      do {
+        x = (Math.random() - 0.5) * 5;
+        z = (Math.random() - 0.5) * 5;
+      } while (Math.sqrt(x*x + z*z) < 1.5);
+
+      const tallWeed = createTallWeed(x, z);
+      scene.add(tallWeed);
+    }
+  }
+
+  // 调用函数放置水草
+  placeWeeds();
+
+  // 添加一些散落的小石头
+  const stoneGeo = new THREE.DodecahedronGeometry(0.1);
+  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9 });
+
+  for (let i = 0; i < 10; i++) {
+    const stone = new THREE.Mesh(stoneGeo, stoneMat);
+    const angle = (i / 10) * Math.PI * 2;
+    const radius = 2 + Math.random() * 1.5;
+    stone.position.x = Math.cos(angle) * radius;
+    stone.position.z = Math.sin(angle) * radius;
+    stone.position.y = -0.45;
+    stone.scale.set(1 + Math.random() * 0.5, 0.5 + Math.random() * 0.3, 1 + Math.random() * 0.5);
+    stone.castShadow = true;
+    stone.receiveShadow = true;
+    scene.add(stone);
+  }
+
+  // ---------- 加载模型函数 ----------
+  function loadModel(modelPath, fishName) {
+    // 显示加载动画
+    document.getElementById('loading').classList.remove('hidden');
+    document.getElementById('progress-fill').style.width = '0%';
+    document.getElementById('progress-text').textContent = '0%';
+
+    // 移除当前模型
+    if (currentModel) {
+      scene.remove(currentModel);
+    }
+
+    const loader = new THREE.GLTFLoader();
+
+    loader.load(
+      modelPath,
+      (gltf) => {
+        currentModel = gltf.scene;
+        currentModel.name = fishName;
+
+        // 计算模型大小并调整
+        const box = new THREE.Box3().setFromObject(currentModel);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+
+        console.log('模型加载成功:', {
+          name: fishName,
+          size: size,
+          center: center
+        });
+
+        // 缩放模型
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = 2.0 / maxDim;
+        currentModel.scale.set(scale, scale, scale);
+
+        // 居中并抬高
+        currentModel.position.sub(center.multiplyScalar(scale));
+        currentModel.position.y += 0.5;
+
+        // 优化材质
+        currentModel.traverse((node) => {
+          if (node.isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = true;
+
+            if (node.material) {
+              if (Array.isArray(node.material)) {
+                node.material.forEach(m => {
+                  m.roughness = 0.2;
+                  m.metalness = 0.2;
+                  if (m.color) {
+                    m.color.multiplyScalar(1.2);
+                  }
+                });
+              } else {
+                node.material.roughness = 0.2;
+                node.material.metalness = 0.2;
+                if (node.material.color) {
+                  node.material.color.multiplyScalar(1.2);
+                }
+              }
+            }
+          }
+        });
+
+        scene.add(currentModel);
+
+        // 隐藏加载动画
+        document.getElementById('loading').classList.add('hidden');
+      },
+      (xhr) => {
+        const percent = Math.floor((xhr.loaded / xhr.total) * 100);
+        document.getElementById('progress-fill').style.width = percent + '%';
+        document.getElementById('progress-text').textContent = percent + '%';
+      },
+      (error) => {
+        console.error('❌ 加载失败:', error);
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('error-message').classList.add('show');
+        document.getElementById('error-detail').textContent = '请检查模型文件路径是否正确: ' + modelPath;
+      }
+    );
+  }
+
+  // 初始加载模型
+  loadModel(currentModelPath, currentFishName);
+
+  // ========== 自定义下拉菜单逻辑 ==========
+  const selectedDiv = document.getElementById('selectedFish');
+  const itemsDiv = document.getElementById('selectItems');
+  const arrow = document.querySelector('.select-arrow');
+
+  // 点击选择框显示/隐藏下拉菜单
+  selectedDiv.addEventListener('click', (e) => {
+    e.stopPropagation();
+    itemsDiv.classList.toggle('show');
+    arrow.classList.toggle('open');
+  });
+
+  // 点击选项
+  document.querySelectorAll('.select-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+
+      // 获取选中的值
+      const value = item.getAttribute('data-value');
+      const text = item.textContent;
+
+      // 更新显示
+      selectedDiv.querySelector('span:first-child').textContent = text;
+
+      // 更新选中状态
+      document.querySelectorAll('.select-item').forEach(i => {
+        i.classList.remove('selected');
+      });
+      item.classList.add('selected');
+
+      // 隐藏下拉菜单
+      itemsDiv.classList.remove('show');
+      arrow.classList.remove('open');
+
+      // 触发鱼种切换
+      const modelPath = MODEL_PATHS[value];
+      if (modelPath) {
+        currentFishName = value;
+        loadModel(modelPath, value);
+      } else {
+        alert('该鱼种的模型文件未配置');
+      }
+    });
+  });
+
+  // 点击其他地方关闭下拉菜单
+  document.addEventListener('click', () => {
+    itemsDiv.classList.remove('show');
+    arrow.classList.remove('open');
+  });
+
+  // 阻止下拉菜单内的点击事件冒泡
+  itemsDiv.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  // ---------- 动画循环 ----------
+  function animate() {
+    requestAnimationFrame(animate);
+
+    // 让粒子缓慢旋转
+    particlesMesh.rotation.y += 0.0005;
+
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  animate();
+
+  // ---------- 亮度控制 ----------
+  const slider = document.getElementById('brightnessSlider');
+  const valueDisplay = document.getElementById('brightness-value');
+
+  slider.addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    valueDisplay.textContent = val + 'x';
+    renderer.toneMappingExposure = val;
+  });
+
+  // ---------- 窗口大小自适应 ----------
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ========== 按钮功能 ==========
+
+  const rotateBtn = document.getElementById('rotateBtn');
+  rotateBtn.addEventListener('click', function() {
+    controls.autoRotate = !controls.autoRotate;
+    this.classList.toggle('active');
+    this.innerHTML = controls.autoRotate ?
+      '<span>🔄</span> 自动旋转' :
+      '<span>⏸️</span> 暂停旋转';
+  });
+
+  const resetBtn = document.getElementById('resetBtn');
+  resetBtn.addEventListener('click', function() {
+    camera.position.set(3, 1.5, 4);
+    controls.target.set(0, 0.5, 0);
+    controls.update();
+  });
+
+  // 全屏按钮
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+  // 跨浏览器全屏函数
+  function toggleFullscreen() {
+    const elem = document.documentElement;
+
+    // 检查当前是否在全屏状态
+    const isFullscreen = document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement;
+
+    if (!isFullscreen) {
+      // 进入全屏
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.mozRequestFullScreen) {
+        elem.mozRequestFullScreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      } else {
+        showAlert('您的浏览器不支持全屏功能', '提示', '📱');
+        return;
+      }
+      fullscreenBtn.innerHTML = '<span>✕</span> 退出全屏';
+    } else {
+      // 退出全屏
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+      fullscreenBtn.innerHTML = '<span>⛶</span> 全屏';
+    }
+  }
+
+  // 监听全屏变化（支持所有浏览器）
+  document.addEventListener('fullscreenchange', updateFullscreenButton);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+  document.addEventListener('mozfullscreenchange', updateFullscreenButton);
+  document.addEventListener('MSFullscreenChange', updateFullscreenButton);
+
+  function updateFullscreenButton() {
+    const isFullscreen = document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement;
+
+    if (isFullscreen) {
+      fullscreenBtn.innerHTML = '<span>✕</span> 退出全屏';
+    } else {
+      fullscreenBtn.innerHTML = '<span>⛶</span> 全屏';
+    }
+  }
+
+  // 移动端优化
+  renderer.domElement.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+  }, { passive: false });
+</script>
+</body>
+</html>

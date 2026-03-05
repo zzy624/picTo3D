@@ -913,11 +913,14 @@
   }
 
   // ---------- 加载模型函数 ----------
+  // ---------- 加载模型函数 ----------
   function loadModel(modelPath, fishName) {
+    console.log('开始加载模型:', modelPath, fishName);
+
     // 显示加载动画
     document.getElementById('loading').classList.remove('hidden');
     document.getElementById('progress-fill').style.width = '0%';
-    document.getElementById('progress-text').textContent = '0%';
+    document.getElementById('progress-text').textContent = '准备中...';
 
     // 移除当前模型
     if (currentModel) {
@@ -926,9 +929,19 @@
 
     const loader = new THREE.GLTFLoader();
 
+    // 添加超时处理
+    const timeoutId = setTimeout(() => {
+      console.error('模型加载超时');
+      document.getElementById('loading').classList.add('hidden');
+      showAlert('加载超时，请检查网络连接', '提示', '⏱️');
+    }, 60000); // 60秒超时
+
     loader.load(
       modelPath,
       (gltf) => {
+        clearTimeout(timeoutId);
+        console.log('模型加载成功:', gltf);
+
         currentModel = gltf.scene;
         currentModel.name = fishName;
 
@@ -937,7 +950,7 @@
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
 
-        console.log('模型加载成功:', {
+        console.log('模型信息:', {
           name: fishName,
           size: size,
           center: center
@@ -945,7 +958,7 @@
 
         // 缩放模型
         const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = 2.0 / maxDim;
+        const scale = 1.8 / maxDim;
         currentModel.scale.set(scale, scale, scale);
 
         // 居中并抬高
@@ -957,21 +970,22 @@
           if (node.isMesh) {
             node.castShadow = true;
             node.receiveShadow = true;
+            node.frustumCulled = false;
 
             if (node.material) {
               if (Array.isArray(node.material)) {
                 node.material.forEach(m => {
-                  m.roughness = 0.2;
-                  m.metalness = 0.2;
+                  m.roughness = 0.3;
+                  m.metalness = 0.1;
                   if (m.color) {
-                    m.color.multiplyScalar(1.2);
+                    m.color.multiplyScalar(1.1);
                   }
                 });
               } else {
-                node.material.roughness = 0.2;
-                node.material.metalness = 0.2;
+                node.material.roughness = 0.3;
+                node.material.metalness = 0.1;
                 if (node.material.color) {
-                  node.material.color.multiplyScalar(1.2);
+                  node.material.color.multiplyScalar(1.1);
                 }
               }
             }
@@ -984,15 +998,48 @@
         document.getElementById('loading').classList.add('hidden');
       },
       (xhr) => {
-        const percent = Math.floor((xhr.loaded / xhr.total) * 100);
-        document.getElementById('progress-fill').style.width = percent + '%';
-        document.getElementById('progress-text').textContent = percent + '%';
+        // 处理进度
+        let percent = 0;
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+
+        if (xhr.lengthComputable && xhr.total > 0) {
+          percent = Math.floor((xhr.loaded / xhr.total) * 100);
+          const loadedMB = (xhr.loaded / (1024 * 1024)).toFixed(2);
+          const totalMB = (xhr.total / (1024 * 1024)).toFixed(2);
+          progressText.textContent = `${percent}% (${loadedMB}MB / ${totalMB}MB)`;
+          progressText.textContent = `${percent}% `
+          console.log('加载进度:', percent + '%', loadedMB + 'MB', '/', totalMB + 'MB');
+        } else {
+          const loadedMB = (xhr.loaded / (1024 * 1024)).toFixed(2);
+          progressText.textContent = `已加载 ${loadedMB}MB...`;
+          console.log('已加载:', loadedMB + 'MB');
+          percent = Math.min(50, Math.floor(xhr.loaded / (1024 * 1024) * 5)); // 估算进度
+        }
+
+        progressFill.style.width = percent + '%';
       },
       (error) => {
+        clearTimeout(timeoutId);
         console.error('❌ 加载失败:', error);
+
+        let errorMsg = '未知错误';
+        if (error instanceof Error) {
+          errorMsg = error.message;
+        } else if (typeof error === 'string') {
+          errorMsg = error;
+        }
+
         document.getElementById('loading').classList.add('hidden');
-        document.getElementById('error-message').classList.add('show');
-        document.getElementById('error-detail').textContent = '请检查模型文件路径是否正确: ' + modelPath;
+        showAlert('模型加载失败: ' + errorMsg, '错误', '❌');
+
+        // 尝试备用路径
+        if (modelPath.includes('./')) {
+          console.log('尝试备用路径:', modelPath.replace('./', ''));
+          setTimeout(() => {
+            loadModel(modelPath.replace('./', ''), fishName);
+          }, 1000);
+        }
       }
     );
   }
